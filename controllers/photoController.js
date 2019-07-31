@@ -22,8 +22,10 @@ module.exports.getAll = async (req, res) => {
     const type = 'photos';
 
     try {
-        const count  = await client.indices.exists({index: index});
-        if (count) {
+      /* check index in elasticsearch, if exist, get data from elasticsearch,
+       otherwise, get data from api, put it in elasticsearch with index and types */
+        const isExist  = await client.indices.exists({index: index});
+        if (isExist) {
             const data = await client.search({index: index, body: {
                 size: 5000,
                 from: 0,
@@ -34,9 +36,10 @@ module.exports.getAll = async (req, res) => {
             });
             return res.json({ source: 'elasticsearch', data: data.hits.hits })
         } else {
+          // get data from api
             let response = await axios('https://jsonplaceholder.typicode.com/photos');
     
-            // create index
+            // put data in elasticsearch with index and types
             bulkIndex(index, type, response.data);
     
             return res.json({ source: 'api', data: response.data })
@@ -50,6 +53,7 @@ const bulkIndex = async function bulkIndex(index, type, data) {
     console.log("index, type, data", index, type, data);
     let bulkBody = [];
   
+    // create index and types in elasticsearch
     data.forEach(item => {
       bulkBody.push({
         index: {
@@ -63,6 +67,7 @@ const bulkIndex = async function bulkIndex(index, type, data) {
     });
   
     try {
+       // set data in elasticsearch
         await client.bulk({body: bulkBody})
     } catch(err) {
         console.log("++++++err++++++", err);
